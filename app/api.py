@@ -16,6 +16,7 @@ import uuid
 from enum import Enum
 
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
 from . import postprocess
@@ -28,6 +29,16 @@ app = FastAPI(
     title="Transcription Service",
     version="0.1.0",
     description="Audio → text with per-segment timestamps (faster-whisper + ffmpeg).",
+)
+
+# CORS: open here so a browser client (e.g. the Dirayah AI widget running on localhost during a
+# demo) can call the service directly. In production this is locked to the widget's origin, or the
+# call is proxied through the app backend so the service isn't browser-facing at all.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
