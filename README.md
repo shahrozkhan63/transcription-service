@@ -5,8 +5,11 @@ Audio → text with **per-segment timestamps**. An open-source speech-to-text pi
 service and a CLI. Audio stays on your own servers — no third-party API required.
 
 > This service powers **voice messages in [Dirayah AI](https://dirayahai.com)** (an AI chatbot for the
-> UAE/GCC): a visitor records a voice note → it's transcribed here → the text flows into the existing
-> chat/RAG pipeline. Demo video: _`<add link>`_.
+> UAE/GCC): a visitor taps the mic, speaks, and the transcription flows into the existing chat/RAG
+> pipeline. **Live demo** — [open the chatbot](https://widget.dirayahai.com/?mode=standalone&domain=9fce274b-2a1a-4599-bf07-2cce5ab0a0f9&apiKey=3f057df1a9da4de1a16bffe9dcf27881&theme=dark&title=DirayahAI+Assistant)
+> and click the mic 🎤 (first note after idle takes ~15–30s — the service scales to zero to save cost).
+
+![Voice messages in the DirayahAI chatbot — mic button highlighted](docs/widget-voice.png)
 
 The focus is **engineering decisions**, not training a model: format handling, long-audio strategy,
 timestamp correctness, failure handling, observability, and a clean path to scale.
