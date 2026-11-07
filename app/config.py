@@ -5,7 +5,9 @@ class Settings(BaseSettings):
     """All tunables live here so behaviour is configuration, not code.
     Override any value with an env var prefixed TRANSCRIBE_ (e.g. TRANSCRIBE_MODEL_SIZE=medium)."""
 
-    model_config = SettingsConfigDict(env_prefix="TRANSCRIBE_", env_file=".env")
+    # protected_namespaces=() silences pydantic's warning about the "model_size" field name
+    # colliding with its reserved "model_" prefix — harmless here, but we keep output clean.
+    model_config = SettingsConfigDict(env_prefix="TRANSCRIBE_", env_file=".env", protected_namespaces=())
 
     # Whisper model: tiny < base < small < medium < large-v3 — accuracy ↑, but speed/RAM cost ↑.
     # "small" + int8 is a good CPU default; bump to medium/large-v3 on a GPU.

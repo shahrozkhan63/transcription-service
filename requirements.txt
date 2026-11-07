@@ -4,6 +4,7 @@
 # servers (no third-party API). Its vad_filter is Silero VAD bundled as ONNX — so we get
 # Silero without a torch dependency.
 faster-whisper==1.0.3
+requests>=2.31            # used by faster-whisper's model downloader; pinned explicitly so install never misses it
 
 # ── API layer ─────────────────────────────────────────────────────────────────
 fastapi==0.115.2
