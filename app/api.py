@@ -31,12 +31,15 @@ app = FastAPI(
     description="Audio → text with per-segment timestamps (faster-whisper + ffmpeg).",
 )
 
-# CORS: open here so a browser client (e.g. the Dirayah AI widget running on localhost during a
-# demo) can call the service directly. In production this is locked to the widget's origin, or the
-# call is proxied through the app backend so the service isn't browser-facing at all.
+# CORS: the DirayahAI widget runs in an iframe served from widget.dirayahai.com, so that is the
+# browser origin that calls this service. Locked to the known origins (+ localhost for dev).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://widget.dirayahai.com",   # the widget iframe — every embed loads from here
+        "https://dirayahai.com",          # standalone chat page / direct use
+        "http://localhost:5173",          # local dev
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
