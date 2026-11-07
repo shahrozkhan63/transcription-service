@@ -1,0 +1,26 @@
+# ── Speech-to-text engine ─────────────────────────────────────────────────────
+# faster-whisper = Whisper re-implemented on CTranslate2: ~4x faster than openai-whisper,
+# int8 quantization, runs CPU or GPU, gives segment timestamps, and keeps audio on OUR
+# servers (no third-party API). Its vad_filter is Silero VAD bundled as ONNX — so we get
+# Silero without a torch dependency.
+faster-whisper==1.0.3
+
+# ── API layer ─────────────────────────────────────────────────────────────────
+fastapi==0.115.2
+uvicorn[standard]==0.30.6
+python-multipart==0.0.12          # multipart file upload
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# ── Quality / tests ───────────────────────────────────────────────────────────
+jiwer==3.0.4                      # Word Error Rate for the accuracy test
+pytest==8.3.3
+
+# ── System dependency (NOT pip) ───────────────────────────────────────────────
+# ffmpeg AND ffprobe must be installed on the OS and on PATH:
+#   macOS:    brew install ffmpeg
+#   Ubuntu:   apt-get install -y ffmpeg
+#   Windows:  choco install ffmpeg      (or download a build from ffmpeg.org)
+# Everything audio-related (probing, decoding, resampling, silence detection,
+# chunk cutting, extracting audio from video containers) is delegated to ffmpeg —
+# it is the single most battle-tested tool for this and avoids format-specific bugs.

@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.pytest_cache/
+*.log
+
+# scratch audio / model downloads — never commit these
+/tmp/
+/data/
+/models/
+*.wav
+*.mp3
+*.m4a
+*.webm
+*.mp4
+
+# keep committed sample OUTPUTS in examples/ (json/srt/vtt) — they document the contract
+!examples/*.json
+!examples/*.srt
+!examples/*.vtt
