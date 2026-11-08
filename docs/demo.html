@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transcription Service — Design Walkthrough</title>
+<style>
+  :root{
+    --bg:#0c1220; --panel:#121b2e; --panel2:#0f1829;
+    --ink:#e8eef9; --muted:#95a6c4; --line:#223049;
+    --accent:#34d3b4; --accent2:#5aa9ff; --warn:#ffb454; --bad:#ff6b6b;
+    --chip:#1b2740;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  .deck{height:100vh;width:100vw;position:relative}
+  .slide{
+    position:absolute; inset:0; display:none;
+    padding:5vh 7vw; flex-direction:column; justify-content:center;
+    animation:fade .35s ease;
+  }
+  .slide.active{display:flex}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  .kicker{color:var(--accent); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:clamp(12px,1.1vw,15px); margin-bottom:14px}
+  h1{font-size:clamp(34px,5.2vw,74px); line-height:1.02; margin:0 0 18px; font-weight:800; letter-spacing:-.02em}
+  h2{font-size:clamp(26px,3.6vw,46px); line-height:1.08; margin:0 0 22px; font-weight:800; letter-spacing:-.01em}
+  .lead{font-size:clamp(17px,1.8vw,24px); color:var(--muted); max-width:60ch; line-height:1.5}
+  .big{font-size:clamp(20px,2.1vw,27px)}
+
+  .row{display:flex; gap:28px; flex-wrap:wrap}
+  .col{flex:1; min-width:260px}
+
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin-top:8px}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:22px 22px}
+  .card h3{margin:0 0 8px; font-size:clamp(17px,1.5vw,21px)}
+  .card p{margin:0; color:var(--muted); font-size:clamp(14px,1.2vw,17px); line-height:1.5}
+  .card .n{font-size:13px;font-weight:700;color:var(--accent);letter-spacing:.1em}
+
+  ul.clean{list-style:none;padding:0;margin:10px 0 0}
+  ul.clean li{padding:11px 0 11px 30px; position:relative; font-size:clamp(16px,1.5vw,21px); color:var(--ink); border-bottom:1px solid var(--line)}
+  ul.clean li:last-child{border-bottom:0}
+  ul.clean li::before{content:"";position:absolute;left:4px;top:50%;width:9px;height:9px;border-radius:50%;background:var(--accent);transform:translateY(-50%)}
+  ul.clean li b{color:var(--ink)}
+  ul.clean li span{color:var(--muted)}
+
+  table{width:100%;border-collapse:collapse;margin-top:6px;font-size:clamp(14px,1.25vw,18px)}
+  th,td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+  td.k{color:var(--ink);font-weight:600;white-space:nowrap}
+  td.v{color:var(--muted)}
+  code{background:var(--chip);padding:2px 7px;border-radius:6px;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.92em;color:#bfe9dd}
+
+  .chips{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+  .chip{background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:8px 16px;color:var(--muted);font-size:clamp(13px,1.1vw,16px)}
+  .chip b{color:var(--accent2)}
+
+  /* progress + nav */
+  .dots{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);display:flex;gap:9px;z-index:5}
+  .dot{width:9px;height:9px;border-radius:50%;background:#2a3952;cursor:pointer;transition:.2s}
+  .dot.on{background:var(--accent);width:26px;border-radius:999px}
+  .counter{position:fixed;bottom:20px;right:26px;color:var(--muted);font-size:13px;z-index:5;font-variant-numeric:tabular-nums}
+  .hint{position:fixed;bottom:20px;left:26px;color:#5f6f8c;font-size:12px;z-index:5}
+  .nav{position:fixed;top:0;bottom:0;width:12vw;z-index:4;cursor:pointer;background:transparent}
+  .nav.l{left:0}.nav.r{right:0}
+
+  .foot{margin-top:26px;color:#64748f;font-size:14px}
+  .accent{color:var(--accent)}
+  .accent2{color:var(--accent2)}
+  .warn{color:var(--warn)}
+  .bad{color:var(--bad)}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+  svg{max-width:100%;height:auto}
+  .pill{display:inline-block;background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:13px;color:var(--muted);margin-bottom:18px}
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+  <!-- 1 — TITLE -->
+  <section class="slide active">
+    <div class="pill mono">faster-whisper · ffmpeg · FastAPI · scale-to-zero</div>
+    <div class="kicker">Transcription Service</div>
+    <h1>Audio&nbsp;→&nbsp;text,<br>with a timestamp on<br>every word.</h1>
+    <p class="lead">A self-hosted speech-to-text pipeline. The audio never leaves our own servers —
+    no third-party API. The focus is <span class="accent">engineering decisions</span>, not training a model.</p>
+    <div class="chips">
+      <div class="chip"><b>Live</b> &nbsp;powers voice messages in DirayahAI</div>
+      <div class="chip"><b>Deployed</b> &nbsp;transcribe.dirayahai.com</div>
+    </div>
+  </section>
+
+  <!-- 2 — THE REAL PROBLEM -->
+  <section class="slide">
+    <div class="kicker">Framing</div>
+    <h2>The hard part isn't "run a model."</h2>
+    <div class="cards">
+      <div class="card"><div class="n">01</div><h3>Any format</h3><p>wav, mp3, m4a, webm/opus, mp4 video… each decodes differently.</p></div>
+      <div class="card"><div class="n">02</div><h3>Long audio</h3><p>a 2-hour file can't go through in one pass — or one HTTP request.</p></div>
+      <div class="card"><div class="n">03</div><h3>Correct timestamps</h3><p>cut a file into pieces and the times drift — the classic bug.</p></div>
+      <div class="card"><div class="n">04</div><h3>Failing gracefully</h3><p>one bad chunk shouldn't kill a 2-hour job. Nothing lost silently.</p></div>
+    </div>
+    <p class="lead" style="margin-top:26px">Every decision in the codebase maps to one of these four.</p>
+  </section>
+
+  <!-- 3 — ARCHITECTURE -->
+  <section class="slide">
+    <div class="kicker">Architecture · the pipeline</div>
+    <h2>One canonical path</h2>
+    <svg viewBox="0 0 1180 430" role="img" aria-label="Pipeline diagram">
+      <defs>
+        <marker id="ar" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5aa9ff"/></marker>
+      </defs>
+      <!-- API box -->
+      <rect x="20" y="20" width="1140" height="104" rx="14" fill="#101a2d" stroke="#2b3c59"/>
+      <text x="40" y="52" fill="#e8eef9" font-size="20" font-weight="700">FastAPI  ·  app/api.py</text>
+      <text x="40" y="82" fill="#95a6c4" font-size="16" font-family="ui-monospace,Menlo,Consolas">POST /transcribe  (sync)   ·   POST /transcribe/async → 202+job_id   ·   GET /jobs/{id}   ·   GET /health</text>
+      <line x1="590" y1="124" x2="590" y2="158" stroke="#5aa9ff" stroke-width="2.5" marker-end="url(#ar)"/>
+      <!-- stages -->
+      <g font-size="15">
+        <rect x="20"  y="168" width="222" height="150" rx="12" fill="#121b2e" stroke="#223049"/>
+        <text x="34" y="196" fill="#34d3b4" font-weight="700" font-size="15">[1] ingest.py</text>
+        <text x="34" y="224" fill="#aeb9cf" font-size="14">validate by CONTENT</text>
+        <text x="34" y="246" fill="#aeb9cf" font-size="14">(ffprobe), reject</text>
+        <text x="34" y="268" fill="#aeb9cf" font-size="14">corrupt / empty /</text>
+        <text x="34" y="290" fill="#aeb9cf" font-size="14">no-audio / oversized</text>
+
+        <rect x="254" y="168" width="222" height="150" rx="12" fill="#121b2e" stroke="#223049"/>
+        <text x="268" y="196" fill="#34d3b4" font-weight="700" font-size="15">[2] normalize.py</text>
+        <text x="268" y="224" fill="#aeb9cf" font-size="14">ffmpeg → 16 kHz</text>
+        <text x="268" y="246" fill="#aeb9cf" font-size="14">mono PCM WAV.</text>
+        <text x="268" y="268" fill="#aeb9cf" font-size="14">ONE format for the</text>
+        <text x="268" y="290" fill="#aeb9cf" font-size="14">whole pipeline</text>
+
+        <rect x="488" y="168" width="222" height="150" rx="12" fill="#121b2e" stroke="#223049"/>
+        <text x="502" y="196" fill="#34d3b4" font-weight="700" font-size="15">[3] chunking.py</text>
+        <text x="502" y="224" fill="#aeb9cf" font-size="14">split at a silence</text>
+        <text x="502" y="246" fill="#aeb9cf" font-size="14">near ~30s, with</text>
+        <text x="502" y="268" fill="#aeb9cf" font-size="14">overlap — keeps</text>
+        <text x="502" y="290" fill="#aeb9cf" font-size="14">words whole</text>
+
+        <rect x="722" y="168" width="222" height="150" rx="12" fill="#121b2e" stroke="#2f6d5f"/>
+        <text x="736" y="196" fill="#34d3b4" font-weight="700" font-size="15">[4] transcriber.py</text>
+        <text x="736" y="224" fill="#aeb9cf" font-size="14">faster-whisper int8</text>
+        <text x="736" y="246" fill="#aeb9cf" font-size="14">+ per-chunk</text>
+        <text x="736" y="268" fill="#ffb454" font-size="14" font-weight="700">TIMESTAMP OFFSET</text>
+        <text x="736" y="290" fill="#aeb9cf" font-size="14">← the correctness fix</text>
+
+        <rect x="956" y="168" width="204" height="150" rx="12" fill="#121b2e" stroke="#223049"/>
+        <text x="970" y="196" fill="#34d3b4" font-weight="700" font-size="15">[5] postprocess</text>
+        <text x="970" y="224" fill="#aeb9cf" font-size="14">merge, drop</text>
+        <text x="970" y="246" fill="#aeb9cf" font-size="14">overlap dupes,</text>
+        <text x="970" y="268" fill="#aeb9cf" font-size="14">re-id → export</text>
+        <text x="970" y="290" fill="#aeb9cf" font-size="14">JSON / SRT / VTT</text>
+      </g>
+      <!-- arrows between stages -->
+      <g stroke="#2b3c59" stroke-width="2">
+        <line x1="242" y1="243" x2="252" y2="243"/><line x1="476" y1="243" x2="486" y2="243"/>
+        <line x1="710" y1="243" x2="720" y2="243"/><line x1="944" y1="243" x2="954" y2="243"/>
+      </g>
+      <!-- output -->
+      <line x1="590" y1="320" x2="590" y2="352" stroke="#5aa9ff" stroke-width="2.5" marker-end="url(#ar)"/>
+      <rect x="250" y="360" width="680" height="54" rx="12" fill="#0f1829" stroke="#2f6d5f"/>
+      <text x="590" y="393" text-anchor="middle" fill="#bfe9dd" font-size="15" font-family="ui-monospace,Menlo,Consolas">{ job_id, language, duration_sec, model, rtf, segments[{id,start,end,text,avg_logprob}] }</text>
+    </svg>
+  </section>
+
+  <!-- 4 — SYNC VS ASYNC -->
+  <section class="slide">
+    <div class="kicker">API design · two shapes of the problem</div>
+    <h2>Short clip? Answer now. Long file? Hand back a ticket.</h2>
+    <svg viewBox="0 0 1180 360" role="img" aria-label="Sync vs async">
+      <defs><marker id="ar2" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#34d3b4"/></marker></defs>
+      <!-- sync -->
+      <text x="40" y="44" fill="#5aa9ff" font-size="17" font-weight="700">SYNC — short clips (chat voice notes)</text>
+      <rect x="40" y="60" width="230" height="56" rx="10" fill="#121b2e" stroke="#223049"/><text x="155" y="94" text-anchor="middle" fill="#e8eef9" font-size="14" font-family="ui-monospace">POST /transcribe</text>
+      <line x1="270" y1="88" x2="320" y2="88" stroke="#34d3b4" stroke-width="2" marker-end="url(#ar2)"/>
+      <rect x="322" y="60" width="230" height="56" rx="10" fill="#121b2e" stroke="#223049"/><text x="437" y="88" text-anchor="middle" fill="#aeb9cf" font-size="13">run pipeline (blocking)</text><text x="437" y="106" text-anchor="middle" fill="#64748f" font-size="12">request stays open</text>
+      <line x1="552" y1="88" x2="602" y2="88" stroke="#34d3b4" stroke-width="2" marker-end="url(#ar2)"/>
+      <rect x="604" y="60" width="200" height="56" rx="10" fill="#0f1829" stroke="#2f6d5f"/><text x="704" y="94" text-anchor="middle" fill="#bfe9dd" font-size="14">200 + full JSON</text>
+
+      <!-- async -->
+      <text x="40" y="186" fill="#ffb454" font-size="17" font-weight="700">ASYNC — long audio (can't hold a 20-min request)</text>
+      <rect x="40" y="202" width="210" height="52" rx="10" fill="#121b2e" stroke="#223049"/><text x="145" y="233" text-anchor="middle" fill="#e8eef9" font-size="13" font-family="ui-monospace">POST /…/async</text>
+      <line x1="250" y1="228" x2="298" y2="228" stroke="#ffb454" stroke-width="2" marker-end="url(#ar2)"/>
+      <rect x="300" y="202" width="210" height="52" rx="10" fill="#0f1829" stroke="#6b5a2f"/><text x="405" y="227" text-anchor="middle" fill="#ffd79a" font-size="14">202 + job_id</text><text x="405" y="245" text-anchor="middle" fill="#64748f" font-size="11">returns immediately</text>
+      <line x1="510" y1="228" x2="558" y2="228" stroke="#ffb454" stroke-width="2" marker-end="url(#ar2)"/>
+      <rect x="560" y="202" width="240" height="52" rx="10" fill="#121b2e" stroke="#223049"/><text x="680" y="227" text-anchor="middle" fill="#aeb9cf" font-size="13">background worker</text><text x="680" y="245" text-anchor="middle" fill="#64748f" font-size="11">queued → processing → done</text>
+      <!-- poll loop -->
+      <rect x="840" y="178" width="300" height="118" rx="12" fill="#101a2d" stroke="#2b3c59"/>
+      <text x="990" y="208" text-anchor="middle" fill="#5aa9ff" font-size="14" font-family="ui-monospace">GET /jobs/{id}</text>
+      <text x="990" y="236" text-anchor="middle" fill="#95a6c4" font-size="13">poll for status</text>
+      <text x="990" y="262" text-anchor="middle" fill="#bfe9dd" font-size="13">→ result when done</text>
+      <line x1="800" y1="228" x2="838" y2="228" stroke="#5aa9ff" stroke-width="2" marker-end="url(#ar2)"/>
+    </svg>
+    <p class="lead" style="margin-top:14px">Same service → two products: <span class="accent">low-latency voice notes</span> and <span class="accent">bulk offline transcription</span>.</p>
+  </section>
+
+  <!-- 5 — FAILURE -->
+  <section class="slide">
+    <div class="kicker">Resilience</div>
+    <h2>One bad chunk ≠ a failed job</h2>
+    <div class="row">
+      <div class="col">
+        <ul class="clean">
+          <li><b>Chunk-level isolation.</b> <span>Each piece transcribes independently — a transient failure retries just that chunk.</span></li>
+          <li><b>Jobs keep state.</b> <span>Error is captured, not swallowed — a failed job stays queryable and re-runnable.</span></li>
+          <li><b>Fail fast at the door.</b> <span>ffprobe rejects broken/empty files up front — never retried forever.</span></li>
+          <li><b>Production:</b> <span>queue retries w/ backoff + a dead-letter queue → nothing lost silently.</span></li>
+        </ul>
+      </div>
+      <div class="col">
+        <svg viewBox="0 0 520 320" role="img" aria-label="Failure flow">
+          <defs><marker id="ar3" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#95a6c4"/></marker></defs>
+          <rect x="160" y="16" width="200" height="48" rx="10" fill="#121b2e" stroke="#223049"/><text x="260" y="45" text-anchor="middle" fill="#e8eef9" font-size="14">transcribe chunk N</text>
+          <line x1="260" y1="64" x2="260" y2="92" stroke="#95a6c4" stroke-width="2" marker-end="url(#ar3)"/>
+          <rect x="190" y="94" width="140" height="44" rx="10" fill="#101a2d" stroke="#2b3c59"/><text x="260" y="121" text-anchor="middle" fill="#95a6c4" font-size="13">failed?</text>
+          <!-- no -->
+          <line x1="330" y1="116" x2="430" y2="116" stroke="#34d3b4" stroke-width="2" marker-end="url(#ar3)"/><text x="360" y="108" fill="#34d3b4" font-size="12">no</text>
+          <rect x="390" y="94" width="120" height="44" rx="10" fill="#0f1829" stroke="#2f6d5f"/><text x="450" y="121" text-anchor="middle" fill="#bfe9dd" font-size="13">merge</text>
+          <!-- transient -->
+          <line x1="260" y1="138" x2="260" y2="166" stroke="#ffb454" stroke-width="2" marker-end="url(#ar3)"/><text x="276" y="158" fill="#ffb454" font-size="12">transient</text>
+          <rect x="150" y="168" width="220" height="46" rx="10" fill="#121b2e" stroke="#6b5a2f"/><text x="260" y="196" text-anchor="middle" fill="#ffd79a" font-size="13">retry THIS chunk (backoff)</text>
+          <line x1="260" y1="214" x2="260" y2="242" stroke="#95a6c4" stroke-width="2" marker-end="url(#ar3)"/>
+          <rect x="150" y="244" width="220" height="56" rx="10" fill="#1a1216" stroke="#6b2f2f"/><text x="260" y="270" text-anchor="middle" fill="#ff8f8f" font-size="13">exhausted → dead-letter</text><text x="260" y="289" text-anchor="middle" fill="#95a6c4" font-size="12">job flagged · file NOT lost</text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 — DECISIONS -->
+  <section class="slide">
+    <div class="kicker">Key engineering decisions</div>
+    <h2>Why, and the trade-off</h2>
+    <table>
+      <tr><th>Decision</th><th>Why</th><th>Trade-off</th></tr>
+      <tr><td class="k">faster-whisper (int8)</td><td class="v">~4× faster than openai-whisper; audio stays on our servers</td><td class="v">a hosted API ships faster but costs per minute + sends audio out</td></tr>
+      <tr><td class="k">Normalize with ffmpeg first</td><td class="v">model only ever sees one format → no per-format code paths</td><td class="v">one cheap extra decode step</td></tr>
+      <tr><td class="k">Detect by content (ffprobe)</td><td class="v">a <code>.wav</code> can be anything — validate the real bytes</td><td class="v">—</td></tr>
+      <tr><td class="k">Silence-aware chunking</td><td class="v">fixed 30s cuts split words; cut at silence keeps them whole</td><td class="v">heuristic; VAD still runs inside transcription</td></tr>
+      <tr><td class="k">Per-chunk offset</td><td class="v">output is absolute to the original audio, not the chunk</td><td class="v">—</td></tr>
+      <tr><td class="k">Async <code>202 + job_id</code></td><td class="v">an HTTP request can't stay open 20+ minutes</td><td class="v">caller polls (or add a webhook)</td></tr>
+    </table>
+  </section>
+
+  <!-- 7 — SCALING -->
+  <section class="slide">
+    <div class="kicker">What production looks like</div>
+    <h2>The contract is already async — so scale is a swap, not a rewrite</h2>
+    <svg viewBox="0 0 1180 300" role="img" aria-label="Scaling topology">
+      <defs><marker id="ar4" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5aa9ff"/></marker></defs>
+      <rect x="20" y="118" width="150" height="64" rx="12" fill="#121b2e" stroke="#223049"/><text x="95" y="155" text-anchor="middle" fill="#e8eef9" font-size="14">clients / widget</text>
+      <line x1="170" y1="150" x2="210" y2="150" stroke="#5aa9ff" stroke-width="2" marker-end="url(#ar4)"/>
+      <rect x="212" y="118" width="150" height="64" rx="12" fill="#121b2e" stroke="#223049"/><text x="287" y="147" text-anchor="middle" fill="#e8eef9" font-size="14">LB / gateway</text><text x="287" y="167" text-anchor="middle" fill="#64748f" font-size="12">auth · rate-limit</text>
+      <line x1="362" y1="150" x2="402" y2="150" stroke="#5aa9ff" stroke-width="2" marker-end="url(#ar4)"/>
+      <rect x="404" y="92" width="150" height="54" rx="12" fill="#101a2d" stroke="#2b3c59"/><text x="479" y="124" text-anchor="middle" fill="#aeb9cf" font-size="14">FastAPI ×N</text>
+      <rect x="404" y="154" width="150" height="54" rx="12" fill="#101a2d" stroke="#2b3c59"/><text x="479" y="186" text-anchor="middle" fill="#aeb9cf" font-size="14">(stateless)</text>
+      <line x1="554" y1="150" x2="594" y2="150" stroke="#5aa9ff" stroke-width="2" marker-end="url(#ar4)"/>
+      <rect x="596" y="118" width="150" height="64" rx="12" fill="#0f1829" stroke="#6b5a2f"/><text x="671" y="147" text-anchor="middle" fill="#ffd79a" font-size="14">Redis queue</text><text x="671" y="167" text-anchor="middle" fill="#64748f" font-size="12">back-pressure</text>
+      <line x1="746" y1="150" x2="786" y2="150" stroke="#5aa9ff" stroke-width="2" marker-end="url(#ar4)"/>
+      <rect x="788" y="92" width="170" height="54" rx="12" fill="#121b2e" stroke="#2f6d5f"/><text x="873" y="124" text-anchor="middle" fill="#bfe9dd" font-size="14">worker pool</text>
+      <rect x="788" y="154" width="170" height="54" rx="12" fill="#121b2e" stroke="#2f6d5f"/><text x="873" y="186" text-anchor="middle" fill="#bfe9dd" font-size="14">CPU / GPU · autoscale</text>
+      <line x1="958" y1="119" x2="998" y2="119" stroke="#5aa9ff" stroke-width="2" marker-end="url(#ar4)"/>
+      <line x1="958" y1="181" x2="998" y2="181" stroke="#5aa9ff" stroke-width="2" marker-end="url(#ar4)"/>
+      <rect x="1000" y="92" width="160" height="54" rx="12" fill="#101a2d" stroke="#223049"/><text x="1080" y="118" text-anchor="middle" fill="#aeb9cf" font-size="13">S3 — audio</text><text x="1080" y="136" text-anchor="middle" fill="#64748f" font-size="11">short TTL</text>
+      <rect x="1000" y="154" width="160" height="54" rx="12" fill="#101a2d" stroke="#223049"/><text x="1080" y="180" text-anchor="middle" fill="#aeb9cf" font-size="13">Postgres</text><text x="1080" y="198" text-anchor="middle" fill="#64748f" font-size="11">transcripts</text>
+    </svg>
+    <div class="chips">
+      <div class="chip"><b>Parallel chunks</b> &nbsp;long file fans out across workers</div>
+      <div class="chip"><b>Scale-to-zero</b> &nbsp;idle cost ≈ $0 · model baked into image for fast cold start</div>
+      <div class="chip"><b>rtf</b> &nbsp;per result = the health metric</div>
+    </div>
+  </section>
+
+  <!-- 8 — PRINCIPAL LENS -->
+  <section class="slide">
+    <div class="kicker">Beyond the code</div>
+    <h2>The right design is cheap to run &amp; safe to operate</h2>
+    <div class="cards">
+      <div class="card"><h3 class="accent2">Infrastructure</h3><p>API and workers scale on different axes — don't pay for GPUs to parse HTTP. Autoscale on queue depth, not CPU.</p></div>
+      <div class="card"><h3 class="accent2">Operations</h3><p>Retention is a policy: encrypt, auto-delete audio, signed URLs. Retryable vs poison errors defined → the runbook is clear.</p></div>
+      <div class="card"><h3 class="accent2">Support</h3><p>Every result carries model, rtf &amp; per-segment confidence — a dispute is answerable with data, not a shrug.</p></div>
+      <div class="card"><h3 class="accent2">Business</h3><p>Duration transcribed is the billing unit. Build-vs-buy is a real number: spiky volume → scale-to-zero; steady high volume → warm pool.</p></div>
+    </div>
+    <p class="lead" style="margin-top:22px">Serves UAE/GCC users → <span class="accent">data residency &amp; "right to delete" are constraints, not footnotes.</span></p>
+  </section>
+
+  <!-- 9 — CLOSE -->
+  <section class="slide">
+    <div class="kicker">The one thing</div>
+    <h2 style="max-width:20ch">I set out to make audio-to-text correct, cheap to run, and safe to operate.</h2>
+    <p class="lead">Normalize-everything · silence-aware chunking with timestamp offsets · async jobs ·
+    scale-to-zero · delete-the-audio — every decision serves one of those three.</p>
+    <div class="chips">
+      <div class="chip mono">github.com/shahrozkhan63/transcription-service</div>
+      <div class="chip mono">transcribe.dirayahai.com/docs</div>
+    </div>
+    <p class="foot">Live in production — powering voice messages in DirayahAI.</p>
+  </section>
+
+</div>
+
+<div class="nav l" onclick="go(-1)"></div>
+<div class="nav r" onclick="go(1)"></div>
+<div class="dots" id="dots"></div>
+<div class="counter" id="counter"></div>
+<div class="hint">← → or Space to navigate · F for fullscreen</div>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  let i=0;
+  const dots=document.getElementById('dots');
+  slides.forEach((_,k)=>{const d=document.createElement('div');d.className='dot'+(k===0?' on':'');d.onclick=()=>show(k);dots.appendChild(d)});
+  const counter=document.getElementById('counter');
+  function show(n){
+    i=Math.max(0,Math.min(slides.length-1,n));
+    slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+    [...dots.children].forEach((d,k)=>d.classList.toggle('on',k===i));
+    counter.textContent=(i+1)+' / '+slides.length;
+  }
+  function go(d){show(i+d)}
+  show(0);
+  document.addEventListener('keydown',e=>{
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();go(1)}
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(-1)}
+    else if(e.key==='Home'){show(0)} else if(e.key==='End'){show(slides.length-1)}
+    else if(e.key.toLowerCase()==='f'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}
+  });
+</script>
+</body>
+</html>
